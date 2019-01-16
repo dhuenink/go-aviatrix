@@ -47,6 +47,33 @@ type Client struct {
 	baseURL      string
 }
 
+// Option is a functional option for configuring the API client
+type Option func(*Client) error
+
+// BaseURL allows overriding of API client baseURL for testing
+func BaseURL(baseURL string) Option {
+	return func(c *Client) error {
+		c.baseURL = baseURL
+		return nil
+	}
+}
+
+// parseOptions parses the supplied options functions and returns a configured
+// *Client instance
+func (c *Client) parseOptions(opts ...Option) error {
+	// Range over each options function and apply it to our API type to
+	// configure it. Options functions are applied in order, with any
+	// conflicting options overriding earlier calls.
+	for _, option := range opts {
+		err := option(c)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // Login to the Aviatrix controller with the username/password provided in
 // the client structure.
 // Arguments:
@@ -87,8 +114,12 @@ func (c *Client) Login() error {
 //   error - if any
 // See Also:
 //   init()
-func NewClient(username string, password string, controllerIP string, HTTPClient *http.Client) (*Client, error) {
-	client := &Client{Username: username, Password: password, HTTPClient: HTTPClient, ControllerIP: controllerIP}
+func NewClient(username string, password string, controllerIP string, HTTPClient *http.Client, opts ...Option) (*Client, error) {
+	apiURL := "https://" + controllerIP + "/v1/api"
+	client := &Client{Username: username, Password: password, HTTPClient: HTTPClient, ControllerIP: controllerIP, baseURL: apiURL}
+	if err := client.parseOptions(opts...); err != nil {
+		return nil, err
+	}
 	return client.init(controllerIP)
 }
 
@@ -103,8 +134,6 @@ func (c *Client) init(controllerIP string) (*Client, error) {
 	if len(controllerIP) == 0 {
 		return nil, fmt.Errorf("Aviatrix: Client: Controller IP is not set")
 	}
-
-	c.baseURL = "https://" + controllerIP + "/v1/api"
 
 	if c.HTTPClient == nil {
 		tr := &http.Transport{

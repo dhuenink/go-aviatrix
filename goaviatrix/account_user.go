@@ -108,3 +108,23 @@ func (c *Client) DeleteAccountUser(user *AccountUser) error {
 	}
 	return nil
 }
+
+func (c *Client) ListAccountUsers() (*[]AccountUser, error) {
+	path := c.baseURL + fmt.Sprintf("?CID=%s&action=list_account_users", c.CID)
+	resp, err := c.Get(path, nil)
+	if err != nil {
+		return nil, err
+	}
+	var data AccountUserListResp
+	if err = json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return nil, err
+	}
+
+	if !data.Return {
+		return nil, errors.New(data.Reason)
+	}
+
+	users := data.AccountUserList
+	return &users, nil
+
+}
