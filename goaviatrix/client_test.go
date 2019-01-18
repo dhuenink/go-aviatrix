@@ -47,7 +47,7 @@ func fixture(path string) string {
 	return string(b)
 }
 
-func TestClientLoginSuccess(t *testing.T) {
+func TestNewClientSuccess(t *testing.T) {
 	tf := "loginRespSuccess.json"
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "application/x-www-form-urlencoded", r.Header.Get("Content-Type"))
@@ -61,7 +61,7 @@ func TestClientLoginSuccess(t *testing.T) {
 	httpClient, teardown := testingHTTPClient(h)
 	defer teardown()
 
-	client, err := NewClient("testuser", "testing123!", "127.0.0.1", SetHTTPClient(httpClient), BaseURL(server.URL+"/v1/api"))
+	client, err := NewClient("testuser", "testing123!", "localhost", SetHTTPClient(httpClient), BaseURL(server.URL+"/v1/api"))
 	if err != nil {
 		fmt.Println("unable to create client")
 	}
@@ -70,21 +70,35 @@ func TestClientLoginSuccess(t *testing.T) {
 
 }
 
-func TestClientLoginFailed(t *testing.T) {
+func TestNewClientBadUserOrPassword(t *testing.T) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "application/x-www-form-urlencoded", r.Header.Get("Content-Type"))
 		r.ParseForm()
 		assert.Equal(t, "login", r.Form.Get("action"))
-		assert.NotEqual(t, "testing123!", r.Form.Get("password"))
+		assert.Equal(t, "testing123!", r.Form.Get("password"))
 		assert.Equal(t, "testuser", r.Form.Get("username"))
 		w.Write([]byte(loginFailed))
 	})
 	httpClient, teardown := testingHTTPClient(h)
 	defer teardown()
 
-	_, err := NewClient("testuser", "testing123", "127.0.0.1", SetHTTPClient(httpClient), BaseURL(server.URL+"/v1/api"))
-	if err != nil {
-		fmt.Println("unable to create client")
+	_, err := NewClient("testuser", "testing123!", "127.0.0.1", SetHTTPClient(httpClient), BaseURL(server.URL+"/v1/api"))
+	assert.NotNil(t, err)
+}
+
+func TestNewClientNoControllerIP(t *testing.T) {
+	_, err := NewClient("testuser", "testing123", "")
+	assert.NotNil(t, err)
+}
+func TestNewClientInvalidControllerIP(t *testing.T) {
+	_, err := NewClient("testuser", "testing123", "10.256.0.1")
+	assert.NotNil(t, err)
+}
+
+func TestNewClientInvalidControllerHostName(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping InvalidControllerIP in short mode")
 	}
+	_, err := NewClient("testuser", "testing123", "xserfsd")
 	assert.NotNil(t, err)
 }

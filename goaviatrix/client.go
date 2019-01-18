@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
+	"net"
 	"net/http"
 	"reflect"
 	"strings"
@@ -89,7 +89,6 @@ func (c *Client) Login() error {
 	account["username"] = c.Username
 	account["password"] = c.Password
 
-	log.Printf("[INFO] Parsed Aviatrix login: %#v", account["username"])
 	resp, err := c.Post(c.baseURL, account)
 	if err != nil {
 		return err
@@ -101,62 +100,60 @@ func (c *Client) Login() error {
 	if !data.Return {
 		return errors.New(data.Reason)
 	}
-	log.Printf("[TRACE] CID is '%s'.", data.CID)
+	debug("[TRACE] CID is '%s'.", data.CID)
 	c.CID = data.CID
 	return nil
 }
 
-// NewClient creates a Client object using the arguments provided.
-// Arguments:
+// NewClient creates a Client object using the arguments provided. Logs
+// in to the controller and sets up the http client.
+// Required Arguments:
 //   username - the controller username
 //   password - the controller password
 //   controllerIP - the controller IP/host
-//   HTTPClient - the http client object
+// Optional Arguments:
+//   SetHTTPClient(httpClient *http.Client) - Allows passing in a custom http client
+//   BaseURL(baseURL string) - Allows passing in a custom base url
 // Returns:
 //   Client - the newly created client
 //   error - if any
 // See Also:
 //   init()
 func NewClient(username string, password string, controllerIP string, opts ...Option) (*Client, error) {
+	if ip := net.ParseIP(controllerIP); ip == nil {
+		debug("[INFO] ControllerIP: %s", controllerIP)
+		// assuming dns name passed; Check if host is valid
+		ip, err := net.LookupIP(controllerIP)
+		if err != nil || len(ip) == 0 {
+			// IP addres or DNS name are invalid
+			return nil, fmt.Errorf("Aviatrix: Client: Controller NotFound, Error: %v", err)
+		}
+		controllerIP = ip[0].String()
+	}
+
 	apiURL := "https://" + controllerIP + "/v1/api"
 	client := &Client{
 		Username:     username,
 		Password:     password,
 		ControllerIP: controllerIP,
-		HTTPClient:   &http.Client{},
 		baseURL:      apiURL,
 	}
 	client.parseOptions(opts...)
-	return client.init(controllerIP)
-}
-
-// init initializes the new client with the given controller IP/host.  Logs
-// in to the controller and sets up the http client.
-// Arguments:
-//    controllerIP - the controller host/IP
-// Returns:
-//   Client - the updated client object
-//   error - if any
-func (c *Client) init(controllerIP string) (*Client, error) {
-	if len(controllerIP) == 0 {
-		return nil, fmt.Errorf("Aviatrix: Client: Controller IP is not set")
-	}
-
-	if c.HTTPClient == nil {
+	if client.HTTPClient == nil {
 		tr := &http.Transport{
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
 			},
 		}
-		c.HTTPClient = &http.Client{Transport: tr}
+		client.HTTPClient = &http.Client{Transport: tr}
 	}
-	if err := c.Login(); err != nil {
+	if err := client.Login(); err != nil {
 		return nil, err
 	}
-
-	return c, nil
+	return client, nil
 }
 
+// Get issues an HTTP GET request with the given interface form-encoded.
 func (c *Client) Get(path string, i interface{}) (*http.Response, error) {
 	return c.Request("GET", path, i)
 }
@@ -214,7 +211,7 @@ func (c *Client) Do(verb string, req interface{}) (*http.Response, []byte, error
 			}
 		}
 
-		log.Printf("[TRACE] %s %s: %d", verb, url, resp.StatusCode)
+		debug("[TRACE] %s %s: %d", verb, url, resp.StatusCode)
 		// decode the json response and look for errors to retry
 		defer resp.Body.Close()
 		if resp.StatusCode == http.StatusOK {
@@ -224,7 +221,7 @@ func (c *Client) Do(verb string, req interface{}) (*http.Response, []byte, error
 			}
 			// Check if the CID has expired; if so re-login
 			if respdata.Reason == "CID is invalid or expired." && loop < 2 {
-				log.Printf("[TRACE] re-login (expired CID)")
+				debug("[TRACE] re-login (expired CID)")
 				time.Sleep(500 * time.Millisecond)
 				if err = c.Login(); err != nil {
 					return resp, body, err
@@ -253,7 +250,7 @@ func (c *Client) Do(verb string, req interface{}) (*http.Response, []byte, error
 // Request makes an HTTP request with the given interface being encoded as
 // form data.
 func (c *Client) Request(verb string, path string, i interface{}) (*http.Response, error) {
-	log.Printf("[TRACE] %s %s", verb, path)
+	debug("[TRACE] %s %s", verb, path)
 	var req *http.Request
 	var err error
 	if i != nil {
@@ -262,7 +259,7 @@ func (c *Client) Request(verb string, path string, i interface{}) (*http.Respons
 			return nil, err
 		}
 		body := buf.String()
-		log.Printf("[TRACE] %s %s Body: %s", verb, path, body)
+		debug("[TRACE] %s %s Body: %s", verb, path, body)
 		reader := strings.NewReader(body)
 		req, err = http.NewRequest(verb, path, reader)
 		if err == nil {
