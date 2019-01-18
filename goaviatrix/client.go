@@ -48,13 +48,19 @@ type Client struct {
 }
 
 // Option is a functional option for configuring the API client
-type Option func(*Client) error
+type Option func(*Client)
 
 // BaseURL allows overriding of API client baseURL for testing
 func BaseURL(baseURL string) Option {
-	return func(c *Client) error {
+	return func(c *Client) {
 		c.baseURL = baseURL
-		return nil
+	}
+}
+
+// SetHTTPClient allows overriding of the http client for testing
+func SetHTTPClient(httpClient *http.Client) Option {
+	return func(c *Client) {
+		c.HTTPClient = httpClient
 	}
 }
 
@@ -65,10 +71,7 @@ func (c *Client) parseOptions(opts ...Option) error {
 	// configure it. Options functions are applied in order, with any
 	// conflicting options overriding earlier calls.
 	for _, option := range opts {
-		err := option(c)
-		if err != nil {
-			return err
-		}
+		option(c)
 	}
 
 	return nil
@@ -114,12 +117,16 @@ func (c *Client) Login() error {
 //   error - if any
 // See Also:
 //   init()
-func NewClient(username string, password string, controllerIP string, HTTPClient *http.Client, opts ...Option) (*Client, error) {
+func NewClient(username string, password string, controllerIP string, opts ...Option) (*Client, error) {
 	apiURL := "https://" + controllerIP + "/v1/api"
-	client := &Client{Username: username, Password: password, HTTPClient: HTTPClient, ControllerIP: controllerIP, baseURL: apiURL}
-	if err := client.parseOptions(opts...); err != nil {
-		return nil, err
+	client := &Client{
+		Username:     username,
+		Password:     password,
+		ControllerIP: controllerIP,
+		HTTPClient:   &http.Client{},
+		baseURL:      apiURL,
 	}
+	client.parseOptions(opts...)
 	return client.init(controllerIP)
 }
 

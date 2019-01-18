@@ -1,41 +1,90 @@
 package goaviatrix
 
 import (
+	"context"
+	"crypto/tls"
 	"fmt"
+	"io/ioutil"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-var (
-	mux    *http.ServeMux
-	server *httptest.Server
-	client *Client
-	err    error
+const (
+	loginFailed = `{
+		"return": false,
+		"reason": "User name\/password does not match"
+	  
+	  }`
 )
 
-func setup() func() {
-	mux = http.NewServeMux()
-	server = httptest.NewTLSServer(mux)
-	fmt.Println(server.URL)
-	return func() {
-		server.Close()
+var server *httptest.Server
+
+func testingHTTPClient(handler http.Handler) (*http.Client, func()) {
+	server = httptest.NewTLSServer(handler)
+
+	c := &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(_ context.Context, network, _ string) (net.Conn, error) {
+				return net.Dial(network, server.Listener.Addr().String())
+			},
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
 	}
+	return c, server.Close
 }
 
-func TestNewClient(t *testing.T) {
-	teardown := setup()
+func fixture(path string) string {
+	b, err := ioutil.ReadFile("testdata/fixtures/" + path)
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
+}
+
+func TestClientLoginSuccess(t *testing.T) {
+	tf := "loginRespSuccess.json"
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "application/x-www-form-urlencoded", r.Header.Get("Content-Type"))
+		r.ParseForm()
+		assert.Equal(t, "login", r.Form.Get("action"))
+		assert.Equal(t, "testing123!", r.Form.Get("password"))
+		assert.Equal(t, "testuser", r.Form.Get("username"))
+		//assert.Equal(t, "secret", r.Header.Get("Secret"))
+		w.Write([]byte(fixture(tf)))
+	})
+	httpClient, teardown := testingHTTPClient(h)
 	defer teardown()
 
-	mux.HandleFunc("/v1/api", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		// ... return the JSON
-	})
-
-	client, err = NewClient("testuser", "testing123!", "127.0.0.1", &http.Client{}, BaseURL(server.URL+"/v1/api"))
+	client, err := NewClient("testuser", "testing123!", "127.0.0.1", SetHTTPClient(httpClient), BaseURL(server.URL+"/v1/api"))
 	if err != nil {
 		fmt.Println("unable to create client")
 	}
-	fmt.Println(client)
+	assert.Nil(t, err)
+	assert.Equal(t, "57e098ed708a8", client.CID)
+
+}
+
+func TestClientLoginFailed(t *testing.T) {
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "application/x-www-form-urlencoded", r.Header.Get("Content-Type"))
+		r.ParseForm()
+		assert.Equal(t, "login", r.Form.Get("action"))
+		assert.NotEqual(t, "testing123!", r.Form.Get("password"))
+		assert.Equal(t, "testuser", r.Form.Get("username"))
+		w.Write([]byte(loginFailed))
+	})
+	httpClient, teardown := testingHTTPClient(h)
+	defer teardown()
+
+	_, err := NewClient("testuser", "testing123", "127.0.0.1", SetHTTPClient(httpClient), BaseURL(server.URL+"/v1/api"))
+	if err != nil {
+		fmt.Println("unable to create client")
+	}
+	assert.NotNil(t, err)
 }
