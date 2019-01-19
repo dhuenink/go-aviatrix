@@ -20,11 +20,11 @@ func TestSetAdminEmail(t *testing.T) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.ParseForm()
 		params := r.URL.Query()
-		fmt.Println(params)
 		if r.Form.Get("action") == "login" {
 			w.Write([]byte(fixture(tf)))
 		}
 		if len(params) != 0 {
+			assert.Equal(t, "57e098ed708a8", params["CID"][0])
 			assert.Equal(t, "add_admin_email_addr", params["action"][0])
 			w.Write([]byte(adminEmail))
 		}
