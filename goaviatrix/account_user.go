@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 )
 
 // AccountUser contains the elements necessary for creating, getting and deleting user.
@@ -94,11 +93,11 @@ func (c *Client) GetAccountUser(user *AccountUser) (*AccountUser, error) {
 	users := data.AccountUserList
 	for i := range users {
 		if users[i].UserName == user.UserName && users[i].AccountName == user.AccountName {
-			log.Printf("[INFO] Found Aviatrix user account %s", user.UserName)
+			debug("[INFO] Found Aviatrix user account %s", user.UserName)
 			return &users[i], nil
 		}
 	}
-	log.Printf("Couldn't find Aviatrix user account %s", user.UserName)
+	debug("Couldn't find Aviatrix user account %s", user.UserName)
 	return nil, ErrNotFound
 
 }

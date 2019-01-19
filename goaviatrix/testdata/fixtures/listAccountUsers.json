@@ -1,0 +1,15 @@
+{
+    "return": true, 
+    "results": [
+      {
+        "acct_names": "acct1",
+        "user_name": "user1",
+        "user_email": "user1@example.com"
+      },
+      {
+        "acct_names": "acct1",
+        "user_name": "user2",
+        "user_email": "user2@example.com"
+      }
+    ]
+  }
