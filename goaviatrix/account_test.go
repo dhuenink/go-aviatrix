@@ -21,7 +21,7 @@ func TestCreateAccount(t *testing.T) {
 			assert.Equal(t, "true", r.Form.Get("aws_iam"))
 			assert.Equal(t, "arn:aws:iam::123456789012:role/aviatrix-role-app", r.Form.Get("aws_role_arn"))
 			assert.Equal(t, "arn:aws:iam::123456789012:role/aviatrix-role-ec2", r.Form.Get("aws_role_ec2"))
-			w.Write([]byte(fixture("createAccountUser.json")))
+			w.Write([]byte(fixture("createAccount.json")))
 		}
 	})
 	httpClient, teardown := testingHTTPClient(h)
@@ -51,30 +51,13 @@ func TestCreateAccount(t *testing.T) {
 
 func TestClient_CreateAccount(t *testing.T) {
 	type fields struct {
-		HTTPClient   *http.Client
-		Username     string
-		Password     string
-		CID          string
-		ControllerIP string
-		baseURL      string
+		respFile string
+		CID      string
 	}
 	type args struct {
 		account *Account
 	}
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.ParseForm()
-		if r.Form.Get("action") == "setup_account_profile" {
-			assert.Equal(t, "57e098ed708a8", r.Form.Get("CID"))
-			assert.Equal(t, "devtest", r.Form.Get("account_name"))
-			assert.Equal(t, "123456789012", r.Form.Get("aws_account_number"))
-			assert.Equal(t, "true", r.Form.Get("aws_iam"))
-			assert.Equal(t, "arn:aws:iam::123456789012:role/aviatrix-role-app", r.Form.Get("aws_role_arn"))
-			assert.Equal(t, "arn:aws:iam::123456789012:role/aviatrix-role-ec2", r.Form.Get("aws_role_ec2"))
-			w.Write([]byte(fixture("createAccountUser.json")))
-		}
-	})
-	httpClient, teardown := testingHTTPClient(h)
-	defer teardown()
+
 	acct := Account{
 		AccountName:      "devtest",
 		CloudType:        1,
@@ -91,22 +74,42 @@ func TestClient_CreateAccount(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "Create Account",
-			fields:  fields{HTTPClient: httpClient, Username: "testuser", Password: "test123!", CID: "57e098ed708a8", ControllerIP: "localhost", baseURL: server.URL + "/v1/api"},
+			name:    "Create Account Success",
+			fields:  fields{respFile: "createAccount.json", CID: "57e098ed708a8"},
 			args:    td,
 			wantErr: false,
+		},
+		{
+			name:    "Create Account Fail",
+			fields:  fields{respFile: "createAccount1.json", CID: "57e098ed708a8"},
+			args:    td,
+			wantErr: true,
 		},
 		// TODO: Add test cases.
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				r.ParseForm()
+				if r.Form.Get("action") == "setup_account_profile" {
+					assert.Equal(t, "57e098ed708a8", r.Form.Get("CID"))
+					assert.Equal(t, "devtest", r.Form.Get("account_name"))
+					assert.Equal(t, "123456789012", r.Form.Get("aws_account_number"))
+					assert.Equal(t, "true", r.Form.Get("aws_iam"))
+					assert.Equal(t, "arn:aws:iam::123456789012:role/aviatrix-role-app", r.Form.Get("aws_role_arn"))
+					assert.Equal(t, "arn:aws:iam::123456789012:role/aviatrix-role-ec2", r.Form.Get("aws_role_ec2"))
+					w.Write([]byte(fixture(tt.fields.respFile)))
+				}
+			})
+			httpClient, teardown := testingHTTPClient(h)
+			defer teardown()
 			c := &Client{
-				HTTPClient:   tt.fields.HTTPClient,
-				Username:     tt.fields.Username,
-				Password:     tt.fields.Password,
+				HTTPClient:   httpClient,
+				Username:     "testuser",
+				Password:     "test123!",
 				CID:          tt.fields.CID,
-				ControllerIP: tt.fields.ControllerIP,
-				baseURL:      tt.fields.baseURL,
+				ControllerIP: "localhost",
+				baseURL:      server.URL + "/v1/api",
 			}
 			if err := c.CreateAccount(tt.args.account); (err != nil) != tt.wantErr {
 				t.Errorf("Client.CreateAccount() error = %v, wantErr %v", err, tt.wantErr)
