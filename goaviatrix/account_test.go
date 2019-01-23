@@ -64,7 +64,7 @@ func TestCreateAccount(t *testing.T) {
 						assert.Equal(t, "true", r.Form.Get("aws_iam"))
 						assert.Equal(t, "arn:aws:iam::123456789012:role/aviatrix-role-app", r.Form.Get("aws_role_arn"))
 						assert.Equal(t, "arn:aws:iam::123456789012:role/aviatrix-role-ec2", r.Form.Get("aws_role_ec2"))
-						w.Write([]byte(fixture("createAccount1.json")))
+						w.Write([]byte(fixture("failResponse.json")))
 					}
 				},
 			},
