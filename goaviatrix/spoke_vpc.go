@@ -84,9 +84,9 @@ func (c *Client) SpokeLeaveTransit(spoke *SpokeVpc) error {
 }
 
 func (c *Client) EnableHaSpokeVpc(spoke *SpokeVpc) error {
-	path := c.baseURL + fmt.Sprintf("?CID=%s&action=enable_spoke_ha&gw_name=%s&public_subnet=%s", c.CID,
-		spoke.GwName, spoke.HASubnet)
-	resp, err := c.Get(path, nil)
+	spoke.CID = c.CID
+	spoke.Action = "enable_spoke_ha"
+	resp, err := c.Post(c.baseURL, spoke)
 	if err != nil {
 		return err
 	}
