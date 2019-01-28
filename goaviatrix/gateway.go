@@ -106,6 +106,12 @@ type GatewayListResp struct {
 	Reason  string    `json:"reason"`
 }
 
+type GatewayListSubnetResp struct {
+	Return  bool     `json:"return"`
+	Results []string `json:"results"`
+	Reason  string   `json:"reason"`
+}
+
 func (c *Client) CreateGateway(gateway *Gateway) error {
 	gateway.CID = c.CID
 	gateway.Action = "connect_container"
@@ -263,4 +269,32 @@ func (c *Client) DeleteGateway(gateway *Gateway) error {
 		return errors.New(data.Reason)
 	}
 	return nil
+}
+
+// GetSubnets returns a list of public or private subnets for a give aws account in the specified
+// region and vpc. If the Public flag is true only public subnets will be returned if the flag is
+// false only private subnets will be returned
+func (c *Client) GetSubnets(gateway *Gateway, public bool) ([]string, error) {
+	var url string
+	if public {
+		url = "?action=list_public_subnets&CID=%s&account_name=%s&cloud_type=%v&region=%s&vpc_id=%s"
+	} else {
+		url = "?action=list_private_subnets&CID=%s&account_name=%s&cloud_type=%v&region=%s&vpc_id=%s"
+	}
+	path := c.baseURL + fmt.Sprintf(url, c.CID, gateway.AccountName, gateway.CloudType, gateway.VpcRegion, gateway.VpcID)
+
+	resp, err := c.Get(path, nil)
+
+	if err != nil {
+		return nil, err
+	}
+	var data GatewayListSubnetResp
+	if err = json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return nil, err
+	}
+	if !data.Return {
+		return nil, errors.New(data.Reason)
+	}
+
+	return data.Results, nil
 }
